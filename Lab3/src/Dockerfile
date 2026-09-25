@@ -1,3 +1,17 @@
-FROM node:6.14.2
-COPY server.js .
-CMD node server.js
+FROM node:18
+
+# Create app directory
+WORKDIR /usr/src/app
+
+# Install app dependencies
+COPY package*.json ./
+
+RUN npm install
+
+# Bundle app source	
+COPY server.js .  
+
+# Bundle app source	
+COPY frontend/ frontend/
+
+CMD [ "node", "server.js" ]

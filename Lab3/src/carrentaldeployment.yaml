@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carrental
+  labels:
+    app: carrental
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: carrental
+  template:
+    metadata:
+      labels:
+        app: carrental
+    spec:
+      containers:
+        - name: carrental
+          image: car_rental:1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "100m"
+            limits:
+              cpu: "200m"

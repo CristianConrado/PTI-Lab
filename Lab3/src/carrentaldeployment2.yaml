@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{"deployment.kubernetes.io/revision":"1"},"creationTimestamp":"2026-09-25T16:54:26Z","generation":1,"labels":{"app":"carrental"},"name":"carrental","namespace":"default","resourceVersion":"2079","uid":"cc2c1f7b-0965-484e-a9ac-0ae2abb6d8cf"},"spec":{"progressDeadlineSeconds":600,"replicas":2,"revisionHistoryLimit":10,"selector":{"matchLabels":{"app":"carrental"}},"strategy":{"rollingUpdate":{"maxSurge":"25%","maxUnavailable":"25%"},"type":"RollingUpdate"},"template":{"metadata":{"labels":{"app":"carrental"}},"spec":{"containers":[{"image":"car_rental:1.0","imagePullPolicy":"IfNotPresent","name":"carrental","ports":[{"containerPort":8080,"protocol":"TCP"}],"resources":{},"terminationMessagePath":"/dev/termination-log","terminationMessagePolicy":"File"}],"dnsPolicy":"ClusterFirst","restartPolicy":"Always","schedulerName":"default-scheduler","securityContext":{},"terminationGracePeriodSeconds":30}}},"status":{"availableReplicas":2,"conditions":[{"lastTransitionTime":"2026-09-25T16:54:27Z","lastUpdateTime":"2026-09-25T16:54:27Z","message":"Deployment has minimum availability.","reason":"MinimumReplicasAvailable","status":"True","type":"Available"},{"lastTransitionTime":"2026-09-25T16:54:26Z","lastUpdateTime":"2026-09-25T16:54:27Z","message":"ReplicaSet \"carrental-79b66654df\" has successfully progressed.","reason":"NewReplicaSetAvailable","status":"True","type":"Progressing"}],"observedGeneration":1,"readyReplicas":2,"replicas":2,"terminatingReplicas":0,"updatedReplicas":2}}
+  creationTimestamp: "2026-09-25T16:56:20Z"
+  generation: 1
+  labels:
+    app: carrental
+  name: carrental
+  namespace: default
+  resourceVersion: "2227"
+  uid: 394a3978-2763-4d75-b55c-a061089264e3
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: carrental
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: carrental
+    spec:
+      containers:
+      - image: car_rental:1.0
+        imagePullPolicy: IfNotPresent
+        name: carrental
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  availableReplicas: 2
+  conditions:
+  - lastTransitionTime: "2026-09-25T16:56:21Z"
+    lastUpdateTime: "2026-09-25T16:56:21Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2026-09-25T16:56:20Z"
+    lastUpdateTime: "2026-09-25T16:56:21Z"
+    message: ReplicaSet "carrental-79b66654df" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  observedGeneration: 1
+  readyReplicas: 2
+  replicas: 2
+  terminatingReplicas: 0
+  updatedReplicas: 2
