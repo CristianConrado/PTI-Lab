@@ -54,7 +54,6 @@ class Blockchain:
                 return False
 
             # Check that the Proof of Work is correct
-            #if not self.valid_proof(last_block['proof'], block['proof'], last_block['previous_hash']):
             if not self.valid_proof(last_block['proof'], block['proof'], block['previous_hash']):
                 return False
 
@@ -294,6 +293,68 @@ def consensus():
         }
 
     return jsonify(response), 200
+
+
+@app.route('/nodes/list', methods=['GET'])
+def list_nodes():
+    response = {
+        'total_nodes': list(blockchain.nodes),
+    }
+    return jsonify(response), 200
+
+@app.route('/validate', methods=['GET'])
+def validate_chain():
+    chain = blockchain.chain
+    genesis_valid = (
+        bool(chain)
+        and isinstance(chain[0], dict)
+        and chain[0].get('index') == 1
+        and chain[0].get('proof') == 100
+        and chain[0].get('previous_hash') == '1'
+        and chain[0].get('transactions') == []
+    )
+    is_valid = genesis_valid and blockchain.valid_chain(chain)
+
+    if is_valid:
+        response = {
+            'message': 'The blockchain is valid',
+            'chain': blockchain.chain
+        }
+    else:
+        response = {
+            'message': 'The blockchain is invalid',
+            'chain': blockchain.chain
+        }
+
+    return jsonify(response), 200
+
+
+#This method should manipulate the chain of a node, so when validated, it will become incorrect.
+@app.route('/nodes/manipulate', methods=['POST'])
+def manipulate_chain():
+    values = request.get_json(silent=True)
+
+    # Check that the required fields are in the POST'ed data
+    required = ['index', 'new_data']
+    if not isinstance(values, dict) or not all(k in values for k in required):
+        return 'Missing values', 400
+
+    index = values['index']
+    new_data = values['new_data']
+
+    if type(index) is not int or index < 1 or index > len(blockchain.chain):
+        return 'Invalid block index', 400
+
+    block = blockchain.chain[index - 1]
+    block['transactions'] = new_data
+    block['previous_hash'] = 'invalidated-by-manipulate'
+
+    response = {
+        'message': f'Block {index} has been manipulated',
+        'block': block
+    }
+    return jsonify(response), 200
+
 
 
 if __name__ == '__main__':
