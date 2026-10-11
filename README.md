@@ -1,6 +1,8 @@
 # PTI Lab
 
-Coursework and labs for PTI (Programació de Tecnologies d'Internet).
+Coursework and labs for PTI (Projecte de Tecnologies d'Internet).
+Done by Cristian Conrado and Alberto Blasco
+QT 2026/2027
 
 ## Labs
 
