@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+practfl/
+uploads/
+models/
+DATASET_EXTRACT/
+Dockerfile
+.dockerignore
+.gitignore
+README.md
+LICENSE

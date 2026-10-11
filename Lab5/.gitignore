@@ -1,0 +1,41 @@
+# ---- Python virtual environments (~4.8 GB, recreate with: pip3 install -r requirements.txt) ----
+practfl/
+venv/
+.venv/
+env/
+
+# ---- Python bytecode / caches ----
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---- Datasets (~1.2 GB, download link in the part I README) ----
+**/client/dataset/
+**/client/database/
+chest_xray/
+
+# ---- Temporary training folders created by the clients (keep the placeholder files) ----
+**/client/tmp*/*
+!**/client/tmp*/README.txt
+!**/client/tmp*/.gitkeep
+
+# ---- Images uploaded through the web app at runtime (part II) ----
+**/uploads/*
+!**/uploads/README.md
+!**/uploads/.gitkeep
+
+# ---- Flask / local config ----
+instance/
+.env
+.flaskenv.local
+*.log
+
+# ---- OS / editor junk ----
+.DS_Store
+__MACOSX/
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

@@ -1,0 +1,195 @@
+PTI - Lab 5 - Deeper look: Bandwidth consumption of federated training (Part I)
+================================================================================
+
+Topic: How much network traffic does the federated learning network generate
+when training the Chest X-Ray model, where does it come from, how do the
+hardcoded parameters (epochs, batch size, steps_per_epoch) influence it, and
+how could it be reduced?
+
+All numbers below are derived from the code in
+federated-learning-network-main/ml_application/federated-learning-network-main
+(server/server.py, server/utils.py, client/client.py, client/utils.py,
+client/chest_x_ray_model_trainer.py) and measured with a small numpy script
+that reproduces the exact serialization done by the code.
+
+
+1. The communication protocol (one training round)
+--------------------------------------------------
+
+   Dashboard --POST /training--> Server
+   Server    --POST /training {weights, lr, epochs, batch_size}--> each client  (DOWNLINK)
+   Client    trains locally (model.fit) on its own images
+   Client    --PUT /model_params {weights, client_url, training_type}--> Server (UPLINK)
+   Server    waits until ALL clients finished (or failed), then averages the
+             weights layer by layer (np.stack(...).mean(0)) = FedAvg
+
+So, in each round, the whole model goes down to every client once and
+comes back up once. The images never leave the client; only weights travel.
+
+Exception: in the first round server.chest_x_ray_model_params is None, so the
+request only carries the config (~100 bytes) and every client starts from its
+own random initialization.
+
+
+2. Size of the model (what travels)
+-----------------------------------
+
+CNN defined in chest_x_ray_model_trainer.py, input 224x224x3:
+
+   Layer                       Parameters
+   Conv2D 32 (3x3)             3*3*3*32  + 32 =     896
+   MaxPool 2x2  -> 112x112x32                       0
+   Conv2D 64 (3x3)             3*3*32*64 + 64 =  18,496
+   MaxPool 2x2  -> 56x56x64                         0
+   Flatten      -> 200,704 values                   0
+   Dense 2                     200,704*2 + 2  = 401,410
+   -------------------------------------------------------
+   TOTAL                                        420,802 parameters
+
+95.4 % of the parameters are in the final Dense layer, because Flatten
+produces 200,704 features.
+
+Check: as float32 that is 420,802 * 4 B = 1.68 MB. The saved file
+client/keras_model1/variables/variables.data-* is 4.9 MiB, about 3 x 1.68 MB
+(the weights plus the two Adam moment buffers), which agrees with the count.
+
+
+3. Cost of the serialization format (JSON)
+------------------------------------------
+
+The weights are not sent as binary. utils.model_params_to_request_params()
+converts each numpy array with .tolist() and aiohttp/requests encode it as
+JSON text. Every float32 becomes a Python double that is printed with up to
+17 significant digits, e.g. "-0.0034517289325594902, ".
+
+Measured with the exact same encoding (json.dumps of the list of lists):
+
+   Encoding                          Size per model   Bytes/param   vs JSON
+   JSON text (current code)            10.07 MB          23.9         1.0x
+   JSON + gzip                          4.00 MB           9.5         2.5x
+   raw float32 binary                   1.68 MB           4.0         6.0x
+   raw float16 binary                   0.84 MB           2.0        12.0x
+
+=> The current protocol sends about 6 times more bytes than the information
+   it actually carries. The receiver also has to parse 420k numbers out of
+   text and build Python lists before converting them back to numpy.
+
+
+4. Traffic per round and in total
+---------------------------------
+
+Let N = number of clients, S = size of the serialized model, R = rounds.
+
+   Traffic per round  = N*S (down) + N*S (up) = 2*N*S
+   Total traffic      ~ 2*N*S*R   (minus N*S, because round 1 has no download)
+
+Lab setup (N = 3, S = 10.07 MB):
+
+   per client per round   :  20.1 MB
+   whole network per round:  60.4 MB
+   10 rounds              : ~574 MB
+
+In the lab everything runs on localhost, so this costs nothing. On a real
+network it does: the server is the bottleneck because it must send N copies
+and receive N copies through a single link. With 100 hospitals and the
+current format, the server would move about 2 GB per round. On a 100 Mbit/s
+link that is about 160 s of pure transfer per round, before any training.
+
+The round is also synchronous (can_update_central_model_params() waits for
+every client), so the slowest client's uplink sets the pace of the whole
+round.
+
+
+5. Effect of the hardcoded parameters (epochs, batch_size, steps_per_epoch)
+---------------------------------------------------------------------------
+
+Bytes per round do NOT depend on epochs or batch size. The model is always
+the same size. What these parameters change is how much useful work is done
+per byte sent.
+
+In the client, model.fit uses steps_per_epoch=10 (hardcoded) and the server
+sends batch_size=5 and epochs=2 (server/federated_learning_config.py). So
+in each round a client trains on only:
+
+   10 steps * 5 images * 2 epochs = 100 images per round
+
+   epochs  images seen/round   network bytes per image seen
+     2           100               20.1 MB / 100  = 201 KB
+    10           500               20.1 MB / 500  =  40 KB
+    20          1000               20.1 MB / 1000 =  20 KB
+
+With the default config, each training image costs about 201 KB of network
+traffic. The average image in the dataset is about 214 KB (1.25 GB / 5,856
+images), so per image the protocol moves almost as much data as the image
+itself.
+
+Increasing local epochs (or steps_per_epoch) is the standard FedAvg trade-off:
+
+   + fewer rounds needed to reach the same accuracy -> less total traffic
+   + better ratio of computation to communication
+   - each client "drifts" more towards its local data before averaging. With
+     non-IID data (e.g. one hospital with mostly PNEUMONIA images) the
+     averaged model can get worse and convergence can become unstable.
+   - longer rounds, so the synchronous wait for the slowest client grows.
+
+So "epochs" is a knob that trades bandwidth against model quality and
+latency, not something to set as high as possible.
+
+
+6. Federated vs. centralised: is FL cheaper in bandwidth?
+---------------------------------------------------------
+
+Dataset on disk (client/dataset/chest_xray): 5,856 images, about 1.25 GB.
+
+If each of the 3 clients owned a third (~417 MB) and simply uploaded it once
+to a central server, that is a one-time cost. FL costs 20.1 MB per client per
+round, so it breaks even at about 417 / 20.1 = ~21 rounds. After that, FL has
+used more bandwidth than uploading the raw data would have.
+
+So the benefit of federated learning here is privacy (patient X-rays never
+leave the hospital), not lower bandwidth. Bandwidth only becomes an advantage
+when the data is much larger than the model, or when it is constantly being
+generated. In this lab, the oversized Dense layer makes the model relatively
+large compared with the data.
+
+
+7. How the traffic could be reduced (ordered by effort)
+------------------------------------------------------
+
+a) Binary encoding instead of JSON lists: send arr.tobytes() (or np.save /
+   base64) with shape/dtype metadata. 6x less traffic, and faster parsing.
+   10.07 MB -> 1.68 MB per transfer.
+
+b) HTTP compression (Content-Encoding: gzip). Almost free to add, 2.5x on JSON.
+
+c) Lower precision (float16) for the transfer only: another 2x on top of (a).
+   The precision lost is very small compared with the noise of averaging.
+
+d) Better architecture: replace Flatten with GlobalAveragePooling2D. The
+   Dense layer goes from 401,410 to 130 parameters and the model from 420,802
+   to 19,522 parameters (21.5x smaller; 78 KB in float32). This is the largest
+   saving and usually does not hurt accuracy for a CNN classifier.
+
+e) Send updates instead of full weights (w_new - w_old), with sparsification
+   (only the top-k largest changes) or quantization. This is the usual
+   technique in production FL systems.
+
+f) Client sampling: only ask a random subset of clients to train each round.
+   Server traffic drops proportionally.
+
+Combining (a) + (c) + (d), one transfer goes from 10.07 MB to about 39 KB,
+roughly 250 times less, with the same protocol and the same number of rounds.
+
+
+8. Conclusion
+-------------
+
+In this implementation, the traffic is 2*N*S per round. S is very large
+(10 MB) for two reasons: (1) weights are encoded as JSON text, about 6x
+bigger than binary, and (2) the Flatten -> Dense design concentrates 95 % of
+the parameters in one layer. Epochs and batch size do not change the bytes
+per round, but they decide how much learning each round buys. With the
+default config (2 epochs x 10 steps x 5 images), each image seen costs about
+201 KB of network traffic. Federated learning gives privacy, not bandwidth
+savings: with this model, after about 21 rounds it has already moved more
+data than uploading the raw dataset would.
